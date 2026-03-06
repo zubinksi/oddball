@@ -17,6 +17,15 @@ interface OddsGame {
   bookmakers: OddsBookmaker[];
 }
 
+interface ScoreEntry { name: string; score: string }
+interface ScoreGame {
+  id: string;
+  home_team: string;
+  away_team: string;
+  completed: boolean;
+  scores: ScoreEntry[] | null;
+}
+
 // ── Response types (mirrored in client/src/types.ts) ─────────────────────────
 
 export interface MichiganGame {
@@ -27,6 +36,7 @@ export interface MichiganGame {
   isMichiganHome: boolean;
   /** Implied win probability (0–1), averaged across bookmakers */
   impliedProbability: number;
+  score: { michigan: number; opponent: number } | null;
   bookmakers: {
     key: string;
     title: string;
@@ -48,21 +58,38 @@ function americanToImplied(odds: number): number {
 }
 
 async function getMichiganOdds(): Promise<OddsResponse> {
-  const url = new URL(`https://api.the-odds-api.com/v4/sports/${SPORT_KEY}/odds`);
-  url.searchParams.set('apiKey', ODDS_API_KEY);
-  url.searchParams.set('regions', 'us');
-  url.searchParams.set('markets', 'h2h');
-  url.searchParams.set('oddsFormat', 'american');
+  const oddsUrl = new URL(`https://api.the-odds-api.com/v4/sports/${SPORT_KEY}/odds`);
+  oddsUrl.searchParams.set('apiKey', ODDS_API_KEY);
+  oddsUrl.searchParams.set('regions', 'us');
+  oddsUrl.searchParams.set('markets', 'h2h');
+  oddsUrl.searchParams.set('oddsFormat', 'american');
 
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`Odds API ${res.status}: ${await res.text()}`);
+  const oddsRes = await fetch(oddsUrl.toString());
+  if (!oddsRes.ok) throw new Error(`Odds API ${oddsRes.status}: ${await oddsRes.text()}`);
 
-  const all: OddsGame[] = await res.json();
+  const all: OddsGame[] = await oddsRes.json();
   const games = all.filter(
     (g) => g.home_team === MICHIGAN_TEAM || g.away_team === MICHIGAN_TEAM
   );
 
   if (games.length === 0) return { noGames: true };
+
+  // Fetch live/recent scores for the Michigan games
+  const scoresUrl = new URL(`https://api.the-odds-api.com/v4/sports/${SPORT_KEY}/scores`);
+  scoresUrl.searchParams.set('apiKey', ODDS_API_KEY);
+  scoresUrl.searchParams.set('daysFrom', '1');
+  scoresUrl.searchParams.set('eventIds', games.map((g) => g.id).join(','));
+
+  const scoreMap = new Map<string, ScoreGame>();
+  try {
+    const scoresRes = await fetch(scoresUrl.toString());
+    if (scoresRes.ok) {
+      const scoreGames: ScoreGame[] = await scoresRes.json();
+      for (const sg of scoreGames) scoreMap.set(sg.id, sg);
+    }
+  } catch {
+    // Scores are best-effort; don't fail the whole response
+  }
 
   return {
     games: games.map((game) => {
@@ -84,6 +111,19 @@ async function getMichiganOdds(): Promise<OddsResponse> {
         ? bms.reduce((s, b) => s + b.impliedProbability, 0) / bms.length
         : 0;
 
+      const sg = scoreMap.get(game.id);
+      let score: { michigan: number; opponent: number } | null = null;
+      if (sg?.scores) {
+        const michiganEntry = sg.scores.find((s) => s.name === MICHIGAN_TEAM);
+        const opponentEntry = sg.scores.find((s) => s.name !== MICHIGAN_TEAM);
+        if (michiganEntry && opponentEntry) {
+          score = {
+            michigan: parseInt(michiganEntry.score, 10),
+            opponent: parseInt(opponentEntry.score, 10),
+          };
+        }
+      }
+
       return {
         id: game.id,
         commenceTime: game.commence_time,
@@ -91,6 +131,7 @@ async function getMichiganOdds(): Promise<OddsResponse> {
         awayTeam: game.away_team,
         isMichiganHome,
         impliedProbability: avg,
+        score,
         bookmakers: bms,
       };
     }),
