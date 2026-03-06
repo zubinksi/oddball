@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { MichiganGame, OddsResponse } from '../types';
 
 const POLL_INTERVAL_MS = 30_000;
+const STORAGE_KEY = 'michiganCompletedGames';
+const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export interface GameHistory {
   game: MichiganGame;
@@ -10,11 +12,36 @@ export interface GameHistory {
 
 export type FetchStatus = 'loading' | 'ok' | 'no_games' | 'error';
 
+function loadCompletedGames(): Map<string, GameHistory> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return new Map();
+    const entries: [string, GameHistory][] = JSON.parse(raw);
+    const cutoff = Date.now() - MAX_AGE_MS;
+    const map = new Map<string, GameHistory>();
+    for (const [id, entry] of entries) {
+      if (new Date(entry.game.commenceTime).getTime() >= cutoff) {
+        map.set(id, entry);
+      }
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+function saveCompletedGames(map: Map<string, GameHistory>) {
+  try {
+    const completed = [...map.entries()].filter(([, e]) => e.game.completed);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(completed));
+  } catch { /* storage full or unavailable */ }
+}
+
 export function useMichiganOdds() {
   const [status, setStatus] = useState<FetchStatus>('loading');
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [gameHistories, setGameHistories] = useState<Map<string, GameHistory>>(new Map());
+  const [gameHistories, setGameHistories] = useState<Map<string, GameHistory>>(loadCompletedGames);
 
   useEffect(() => {
     async function poll() {
@@ -34,25 +61,15 @@ export function useMichiganOdds() {
           setStatus('ok');
           setErrorMessage(null);
           setGameHistories((prev) => {
-            const next = new Map<string, GameHistory>();
-            const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-
-            // Carry forward completed games that are no longer in the API response
-            // (they drop out of the scores endpoint after ~24h)
-            for (const [id, entry] of prev) {
-              if (
-                entry.game.completed &&
-                new Date(entry.game.commenceTime).getTime() >= cutoff
-              ) {
-                next.set(id, entry);
-              }
-            }
+            // Start from previously known completed games (localStorage-backed)
+            const next = new Map(prev);
 
             // Overlay with latest from API (always wins)
             for (const game of data.games) {
               next.set(game.id, { game, history: game.history });
             }
 
+            saveCompletedGames(next);
             return next;
           });
         }
