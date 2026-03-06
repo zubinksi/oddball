@@ -303,12 +303,17 @@ async function getTrackedOdds(): Promise<OddsResponse> {
     })
   );
 
-  games.sort((a, b) => {
+  const cutoffMs = Date.now() + 24 * 60 * 60 * 1000;
+  const filtered = games.filter(
+    (g) => g.completed || new Date(g.commenceTime).getTime() <= cutoffMs
+  );
+
+  filtered.sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
     return new Date(a.commenceTime).getTime() - new Date(b.commenceTime).getTime();
   });
 
-  return { games };
+  return filtered.length === 0 ? { noGames: true } : { games: filtered };
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
