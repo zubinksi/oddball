@@ -194,10 +194,10 @@ function findTrackedTeam(home: string, away: string): string {
 }
 
 async function getTrackedOdds(): Promise<OddsResponse> {
-  // Fetch recent scores (last 3 days) — covers completed and in-progress games
+  // Fetch recent scores (last 1 day) — covers completed and in-progress games
   const scoresUrl = new URL(`https://api.the-odds-api.com/v4/sports/${SPORT_KEY}/scores`);
   scoresUrl.searchParams.set('apiKey', ODDS_API_KEY);
-  scoresUrl.searchParams.set('daysFrom', '3');
+  scoresUrl.searchParams.set('daysFrom', '1');
 
   const scoreMap = new Map<string, ScoreGame>();
   try {
