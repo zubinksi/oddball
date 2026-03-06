@@ -2,7 +2,7 @@ import { useMichiganOdds } from './hooks/useMichiganOdds';
 import { GameOddsChart } from './components/GameOddsChart';
 import { StatusBar } from './components/StatusBar';
 
-const MAIZE = '#FFE3C4';
+const ACCENT = '#fbcf9a';
 
 export default function App() {
   const { status, lastUpdate, errorMessage, gameHistories } = useMichiganOdds();

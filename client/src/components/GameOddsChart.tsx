@@ -5,7 +5,7 @@ interface Props {
   entry: GameHistory;
 }
 
-const ACCENT = '#FFE3C4';
+const ACCENT = '#fbcf9a';
 
 function formatPct(v: number) {
   return `${(v * 100).toFixed(1)}%`;
@@ -103,7 +103,8 @@ export function GameOddsChart({ entry }: Props) {
 
 const styles: Record<string, React.CSSProperties> = {
   card: {
-    border: '0px solid #1f2937',
+    border: '1px solid #6b7280',
+    padding: 18px,
     borderRadius: 12,
     display: 'flex',
     flexDirection: 'column',
