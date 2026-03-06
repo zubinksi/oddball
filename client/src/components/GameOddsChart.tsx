@@ -104,8 +104,8 @@ export function GameOddsChart({ entry }: Props) {
 const styles: Record<string, React.CSSProperties> = {
   card: {
     border: '1px solid #6b7280',
-    padding: 18px,
     borderRadius: 12,
+    padding: '18px',
     display: 'flex',
     flexDirection: 'column',
     gap: 16,
