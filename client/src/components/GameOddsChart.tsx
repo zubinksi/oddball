@@ -42,6 +42,7 @@ export function GameOddsChart({ entry }: Props) {
             <div style={styles.score}>
               <span style={styles.scoreValue}>{game.score.michigan}</span>
               <span style={styles.scoreDash}>–</span>
+              <span style={styles.scoreValue}>{game.score.opponent}</span>
               <span style={styles.scoreTeam}>{opponent}</span>
             </div>
           )}
@@ -94,10 +95,8 @@ export function GameOddsChart({ entry }: Props) {
 
 const styles: Record<string, React.CSSProperties> = {
   card: {
-    
     border: '0px solid #1f2937',
     borderRadius: 12,
-  
     display: 'flex',
     flexDirection: 'column',
     gap: 16,

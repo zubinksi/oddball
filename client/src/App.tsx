@@ -19,15 +19,9 @@ export default function App() {
         {/* Page header */}
         <header style={styles.header}>
           <div style={styles.titleRow}>
-            <div style={styles.logoWrap}>
-              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                <circle cx="18" cy="18" r="18" fill={MAIZE} />
-                <text x="18" y="24" textAnchor="middle" fontSize="18" fontWeight="800" fill="#00274C">M</text>
-              </svg>
-            </div>
             <div>
-              <h1 style={styles.title}>Michigan Basketball</h1>
-              <p style={styles.subtitle}>Real-time win probability</p>
+              <h1 style={styles.title}></h1>
+              <p style={styles.subtitle}></p>
             </div>
           </div>
           <StatusBar status={status} lastUpdate={lastUpdate} />
