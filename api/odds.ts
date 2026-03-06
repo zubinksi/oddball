@@ -3,6 +3,69 @@ import type { IncomingMessage, ServerResponse } from 'http';
 const ODDS_API_KEY = process.env.ODDS_API_KEY ?? 'f24a1c721e290d637ca7ab2988a7b401';
 const SPORT_KEY = 'basketball_ncaab';
 const MICHIGAN_TEAM = 'Michigan Wolverines';
+const HISTORY_TTL_SECS = 24 * 60 * 60; // 24 hours
+const HISTORY_MAX_AGE_MS = HISTORY_TTL_SECS * 1000;
+
+// ── History storage ───────────────────────────────────────────────────────────
+// Uses Vercel KV when KV_REST_API_URL + KV_REST_API_TOKEN are set,
+// otherwise falls back to an in-memory Map (persists for the lifetime of
+// the dev-server process).
+
+export interface HistoryPoint { time: number; value: number }
+
+const memStore = new Map<string, HistoryPoint[]>();
+
+function kvHeaders() {
+  return {
+    Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+async function getHistory(gameId: string): Promise<HistoryPoint[]> {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (url && token) {
+    try {
+      const res = await fetch(`${url}/get/game:${gameId}`, { headers: kvHeaders() });
+      if (res.ok) {
+        const { result } = await res.json() as { result: string | null };
+        if (result) return JSON.parse(result) as HistoryPoint[];
+      }
+    } catch { /* fallthrough to mem */ }
+  }
+  return memStore.get(gameId) ?? [];
+}
+
+async function saveHistory(gameId: string, points: HistoryPoint[]): Promise<void> {
+  memStore.set(gameId, points);
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (url && token) {
+    try {
+      // SETEX key seconds value
+      await fetch(`${url}/pipeline`, {
+        method: 'POST',
+        headers: kvHeaders(),
+        body: JSON.stringify([['SETEX', `game:${gameId}`, HISTORY_TTL_SECS, JSON.stringify(points)]]),
+      });
+    } catch { /* best-effort */ }
+  }
+}
+
+async function appendPoint(gameId: string, point: HistoryPoint, completed: boolean): Promise<HistoryPoint[]> {
+  const existing = await getHistory(gameId);
+  const cutoff = Date.now() - HISTORY_MAX_AGE_MS;
+  const trimmed = existing.filter((p) => p.time * 1000 >= cutoff);
+
+  // For completed games only append if the last value differs (final point once)
+  const lastVal = trimmed[trimmed.length - 1]?.value;
+  if (completed && lastVal === point.value) return trimmed;
+
+  const next = [...trimmed, point];
+  await saveHistory(gameId, next);
+  return next;
+}
 
 // ── Odds API types ────────────────────────────────────────────────────────────
 
@@ -25,9 +88,7 @@ interface ScoreGame {
   away_team: string;
   completed: boolean;
   scores: ScoreEntry[] | null;
-  /** Period/clock description for in-progress games, e.g. "1st Half 14:32" */
   description?: string;
-  last_update?: string;
 }
 
 // ── Response types (mirrored in client/src/types.ts) ─────────────────────────
@@ -38,13 +99,11 @@ export interface MichiganGame {
   homeTeam: string;
   awayTeam: string;
   isMichiganHome: boolean;
-  /** Implied win probability (0–1), averaged across bookmakers */
   impliedProbability: number;
-  /** Whether the game is finished */
   completed: boolean;
   score: { michigan: number; opponent: number } | null;
-  /** Game clock / period description when in-progress, e.g. "1st Half 14:32" */
   gameTime: string | null;
+  history: HistoryPoint[];
   bookmakers: {
     key: string;
     title: string;
@@ -60,33 +119,30 @@ export type OddsResponse =
 
 // ── Logic ─────────────────────────────────────────────────────────────────────
 
-/** American odds → raw implied probability (no vig removal). */
 function americanToImplied(odds: number): number {
   return odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
 }
 
 async function getMichiganOdds(): Promise<OddsResponse> {
-  // Fetch scores for the last 24 hours — covers completed and in-progress games
+  // Fetch recent scores (last 24h) — covers completed and in-progress games
   const scoresUrl = new URL(`https://api.the-odds-api.com/v4/sports/${SPORT_KEY}/scores`);
   scoresUrl.searchParams.set('apiKey', ODDS_API_KEY);
   scoresUrl.searchParams.set('daysFrom', '1');
 
   const scoreMap = new Map<string, ScoreGame>();
   try {
-    const scoresRes = await fetch(scoresUrl.toString());
-    if (scoresRes.ok) {
-      const all: ScoreGame[] = await scoresRes.json();
+    const res = await fetch(scoresUrl.toString());
+    if (res.ok) {
+      const all: ScoreGame[] = await res.json();
       for (const sg of all) {
         if (sg.home_team === MICHIGAN_TEAM || sg.away_team === MICHIGAN_TEAM) {
           scoreMap.set(sg.id, sg);
         }
       }
     }
-  } catch {
-    // best-effort
-  }
+  } catch { /* best-effort */ }
 
-  // Fetch current odds — only active/upcoming games have entries here
+  // Fetch current odds — only active/upcoming games appear here
   const oddsUrl = new URL(`https://api.the-odds-api.com/v4/sports/${SPORT_KEY}/odds`);
   oddsUrl.searchParams.set('apiKey', ODDS_API_KEY);
   oddsUrl.searchParams.set('regions', 'us');
@@ -95,96 +151,86 @@ async function getMichiganOdds(): Promise<OddsResponse> {
 
   const oddsMap = new Map<string, OddsGame>();
   try {
-    const oddsRes = await fetch(oddsUrl.toString());
-    if (oddsRes.ok) {
-      const all: OddsGame[] = await oddsRes.json();
+    const res = await fetch(oddsUrl.toString());
+    if (res.ok) {
+      const all: OddsGame[] = await res.json();
       for (const g of all) {
         if (g.home_team === MICHIGAN_TEAM || g.away_team === MICHIGAN_TEAM) {
           oddsMap.set(g.id, g);
         }
       }
     }
-  } catch {
-    // best-effort
-  }
+  } catch { /* best-effort */ }
 
-  // Union of all game IDs seen in either source
   const allIds = new Set([...scoreMap.keys(), ...oddsMap.keys()]);
   if (allIds.size === 0) return { noGames: true };
 
-  const games: MichiganGame[] = [];
+  const now = Date.now() / 1000;
+  const games = await Promise.all(
+    Array.from(allIds).map(async (id) => {
+      const sg = scoreMap.get(id);
+      const og = oddsMap.get(id);
 
-  for (const id of allIds) {
-    const sg = scoreMap.get(id);
-    const og = oddsMap.get(id);
+      const homeTeam = sg?.home_team ?? og?.home_team ?? '';
+      const awayTeam = sg?.away_team ?? og?.away_team ?? '';
+      const commenceTime = sg?.commence_time ?? og?.commence_time ?? '';
+      const isMichiganHome = homeTeam === MICHIGAN_TEAM;
+      const completed = sg?.completed ?? false;
 
-    // Use scores data for team names / commence time when available
-    const homeTeam = sg?.home_team ?? og?.home_team ?? '';
-    const awayTeam = sg?.away_team ?? og?.away_team ?? '';
-    const commenceTime = sg?.commence_time ?? og?.commence_time ?? '';
-    const isMichiganHome = homeTeam === MICHIGAN_TEAM;
-    const completed = sg?.completed ?? false;
+      const bms = og
+        ? og.bookmakers.flatMap((bm) => {
+            const h2h = bm.markets.find((m) => m.key === 'h2h');
+            const outcome = h2h?.outcomes.find((o) => o.name === MICHIGAN_TEAM);
+            if (!outcome) return [];
+            return [{
+              key: bm.key,
+              title: bm.title,
+              americanOdds: outcome.price,
+              impliedProbability: americanToImplied(outcome.price),
+            }];
+          })
+        : [];
 
-    // Build bookmaker list from odds (empty for completed games)
-    const bms = og
-      ? og.bookmakers.flatMap((bm) => {
-          const h2h = bm.markets.find((m) => m.key === 'h2h');
-          const outcome = h2h?.outcomes.find((o) => o.name === MICHIGAN_TEAM);
-          if (!outcome) return [];
-          return [{
-            key: bm.key,
-            title: bm.title,
-            americanOdds: outcome.price,
-            impliedProbability: americanToImplied(outcome.price),
-          }];
-        })
-      : [];
-
-    let impliedProbability: number;
-    if (bms.length > 0) {
-      // Active game: average bookmaker probability
-      impliedProbability = bms.reduce((s, b) => s + b.impliedProbability, 0) / bms.length;
-    } else if (completed && sg?.scores) {
-      // Completed game: 1.0 if Michigan won, 0.0 if lost
-      const michiganScore = sg.scores.find((s) => s.name === MICHIGAN_TEAM);
-      const opponentScore = sg.scores.find((s) => s.name !== MICHIGAN_TEAM);
-      const mPts = michiganScore ? parseInt(michiganScore.score, 10) : 0;
-      const oPts = opponentScore ? parseInt(opponentScore.score, 10) : 0;
-      impliedProbability = mPts > oPts ? 1 : 0;
-    } else {
-      impliedProbability = 0.5;
-    }
-
-    // Score
-    let score: { michigan: number; opponent: number } | null = null;
-    let gameTime: string | null = null;
-    if (sg?.scores) {
-      const michiganEntry = sg.scores.find((s) => s.name === MICHIGAN_TEAM);
-      const opponentEntry = sg.scores.find((s) => s.name !== MICHIGAN_TEAM);
-      if (michiganEntry && opponentEntry) {
-        score = {
-          michigan: parseInt(michiganEntry.score, 10),
-          opponent: parseInt(opponentEntry.score, 10),
-        };
+      let impliedProbability: number;
+      if (bms.length > 0) {
+        impliedProbability = bms.reduce((s, b) => s + b.impliedProbability, 0) / bms.length;
+      } else if (completed && sg?.scores) {
+        const mPts = parseInt(sg.scores.find((s) => s.name === MICHIGAN_TEAM)?.score ?? '0', 10);
+        const oPts = parseInt(sg.scores.find((s) => s.name !== MICHIGAN_TEAM)?.score ?? '0', 10);
+        impliedProbability = mPts > oPts ? 1 : 0;
+      } else {
+        impliedProbability = 0.5;
       }
-      if (!completed && sg.description) gameTime = sg.description;
-    }
 
-    games.push({
-      id,
-      commenceTime,
-      homeTeam,
-      awayTeam,
-      isMichiganHome,
-      impliedProbability,
-      completed,
-      score,
-      gameTime,
-      bookmakers: bms,
-    });
-  }
+      let score: { michigan: number; opponent: number } | null = null;
+      let gameTime: string | null = null;
+      if (sg?.scores) {
+        const mEntry = sg.scores.find((s) => s.name === MICHIGAN_TEAM);
+        const oEntry = sg.scores.find((s) => s.name !== MICHIGAN_TEAM);
+        if (mEntry && oEntry) {
+          score = { michigan: parseInt(mEntry.score, 10), opponent: parseInt(oEntry.score, 10) };
+        }
+        if (!completed && sg.description) gameTime = sg.description;
+      }
 
-  // Sort: active/upcoming first, completed last
+      const history = await appendPoint(id, { time: now, value: impliedProbability }, completed);
+
+      return {
+        id,
+        commenceTime,
+        homeTeam,
+        awayTeam,
+        isMichiganHome,
+        impliedProbability,
+        completed,
+        score,
+        gameTime,
+        history,
+        bookmakers: bms,
+      } satisfies MichiganGame;
+    })
+  );
+
   games.sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
     return new Date(a.commenceTime).getTime() - new Date(b.commenceTime).getTime();
@@ -193,16 +239,12 @@ async function getMichiganOdds(): Promise<OddsResponse> {
   return { games };
 }
 
-// ── Handler (Vercel serverless + Express-compatible) ─────────────────────────
+// ── Handler ───────────────────────────────────────────────────────────────────
 
-export default async function handler(
-  _req: IncomingMessage,
-  res: ServerResponse
-) {
+export default async function handler(_req: IncomingMessage, res: ServerResponse) {
   try {
     const data = await getMichiganOdds();
     res.setHeader('Content-Type', 'application/json');
-    // CDN caches for 30 s; stale responses served for up to 60 s while revalidating
     res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     res.end(JSON.stringify(data));
   } catch (err) {

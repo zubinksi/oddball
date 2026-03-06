@@ -8,6 +8,7 @@ export interface MichiganGame {
   completed: boolean;
   score: { michigan: number; opponent: number } | null;
   gameTime: string | null;
+  history: { time: number; value: number }[];
   bookmakers: {
     key: string;
     title: string;
