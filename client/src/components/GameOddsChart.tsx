@@ -56,16 +56,22 @@ export function GameOddsChart({ entry }: Props) {
       </div>
 
       {/* Probability headline */}
-      <div style={styles.probRow}>
+      <div style={styles.probSection}>
         <span style={styles.probLabel}>WIN PROBABILITY</span>
-        <span
-          style={{
-            ...styles.probValue,
-            color: pct >= 0.5 ? ACCENT : '#ef4444',
-          }}
-        >
-          {formatPct(pct)}
-        </span>
+        <div style={styles.probRow}>
+          <div style={styles.probTeam}>
+            <span style={{ ...styles.probValue, color: pct >= 0.5 ? ACCENT : '#ef4444' }}>
+              {formatPct(pct)}
+            </span>
+            <span style={styles.probTeamLabel}>Michigan</span>
+          </div>
+          <div style={{ ...styles.probTeam, alignItems: 'flex-end' }}>
+            <span style={{ ...styles.probValue, color: pct < 0.5 ? '#ef4444' : '#6b7280' }}>
+              {formatPct(1 - pct)}
+            </span>
+            <span style={styles.probTeamLabel}>{opponent}</span>
+          </div>
+        </div>
       </div>
 
       {/* Liveline chart */}
@@ -84,6 +90,7 @@ export function GameOddsChart({ entry }: Props) {
           ]}
           loading={history.length === 0}
           showValue={false}
+          referenceLine={{ value: 0.5, label: '50%' }}
           grid
           fill
           pulse
@@ -137,11 +144,22 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     padding: '4px 10px',
   },
+  probSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
   probRow: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
+  probTeam: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+  },
+  probTeamLabel: { fontSize: 12, color: '#6b7280' },
   probLabel: { fontSize: 13, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' },
   probValue: { fontSize: 32, fontWeight: 800, fontVariantNumeric: 'tabular-nums' },
   chartWrap: { height: 220 },
