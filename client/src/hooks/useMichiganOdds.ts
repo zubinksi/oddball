@@ -3,7 +3,7 @@ import type { MichiganGame, OddsResponse } from '../types';
 
 const POLL_INTERVAL_MS = 30_000;
 const STORAGE_KEY = 'michiganCompletedGames';
-const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
 export interface GameHistory {
   game: MichiganGame;

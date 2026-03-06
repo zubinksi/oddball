@@ -156,10 +156,10 @@ function americanToImplied(odds: number): number {
 }
 
 async function getMichiganOdds(): Promise<OddsResponse> {
-  // Fetch recent scores (last 24h) — covers completed and in-progress games
+  // Fetch recent scores (last 3 days) — covers completed and in-progress games
   const scoresUrl = new URL(`https://api.the-odds-api.com/v4/sports/${SPORT_KEY}/scores`);
   scoresUrl.searchParams.set('apiKey', ODDS_API_KEY);
-  scoresUrl.searchParams.set('daysFrom', '1');
+  scoresUrl.searchParams.set('daysFrom', '3');
 
   const scoreMap = new Map<string, ScoreGame>();
   try {
