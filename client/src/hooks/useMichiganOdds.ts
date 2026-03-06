@@ -33,11 +33,26 @@ export function useMichiganOdds() {
         } else {
           setStatus('ok');
           setErrorMessage(null);
-          setGameHistories(() => {
+          setGameHistories((prev) => {
             const next = new Map<string, GameHistory>();
+            const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+
+            // Carry forward completed games that are no longer in the API response
+            // (they drop out of the scores endpoint after ~24h)
+            for (const [id, entry] of prev) {
+              if (
+                entry.game.completed &&
+                new Date(entry.game.commenceTime).getTime() >= cutoff
+              ) {
+                next.set(id, entry);
+              }
+            }
+
+            // Overlay with latest from API (always wins)
             for (const game of data.games) {
               next.set(game.id, { game, history: game.history });
             }
+
             return next;
           });
         }
