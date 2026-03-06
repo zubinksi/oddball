@@ -3,15 +3,20 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "npm run dev --workspace=server",
+    "dev": "concurrently \"tsx watch dev-server.ts\" \"npm run dev --workspace=client\"",
     "build": "npm run build --workspace=client",
-    "start": "npm run start --workspace=server"
+    "start": "tsx dev-server.ts"
   },
   "workspaces": [
-    "server",
     "client"
   ],
+  "dependencies": {
+    "express": "^4.21.2"
+  },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "@types/express": "^5.0.0",
+    "concurrently": "^9.1.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
   }
 }

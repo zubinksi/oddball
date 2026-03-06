@@ -5,8 +5,7 @@ import { StatusBar } from './components/StatusBar';
 const MAIZE = '#FFCB05';
 
 export default function App() {
-  const { status, lastUpdate, noGames, errorMessage, gameHistories } =
-    useMichiganOdds();
+  const { status, lastUpdate, errorMessage, gameHistories } = useMichiganOdds();
 
   const games = [...gameHistories.values()].sort(
     (a, b) =>
@@ -42,17 +41,17 @@ export default function App() {
             </div>
           )}
 
-          {status === 'connecting' && games.length === 0 && (
+          {status === 'loading' && games.length === 0 && (
             <div style={styles.placeholder}>
-              <p style={styles.placeholderText}>Connecting to live odds feed…</p>
+              <p style={styles.placeholderText}>Fetching odds…</p>
             </div>
           )}
 
-          {!errorMessage && status !== 'connecting' && noGames && (
+          {status === 'no_games' && (
             <div style={styles.placeholder}>
               <p style={styles.placeholderText}>No Michigan games with active odds right now.</p>
               <p style={styles.placeholderSub}>
-                The chart will update automatically when a game goes live or odds become available.
+                The chart will update automatically when odds become available.
               </p>
             </div>
           )}

@@ -1,10 +1,3 @@
-export interface MichiganOddsUpdate {
-  type: 'odds_update' | 'no_games' | 'error';
-  timestamp: number;
-  games?: MichiganGame[];
-  message?: string;
-}
-
 export interface MichiganGame {
   id: string;
   commenceTime: string;
@@ -15,7 +8,12 @@ export interface MichiganGame {
   bookmakers: {
     key: string;
     title: string;
-    impliedProbability: number;
     americanOdds: number;
+    impliedProbability: number;
   }[];
 }
+
+export type OddsResponse =
+  | { games: MichiganGame[] }
+  | { noGames: true }
+  | { error: string };
