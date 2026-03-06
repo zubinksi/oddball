@@ -1,4 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import { readFileSync, writeFileSync } from 'fs';
+import { resolve } from 'path';
 
 const ODDS_API_KEY = process.env.ODDS_API_KEY ?? 'f24a1c721e290d637ca7ab2988a7b401';
 const SPORT_KEY = 'basketball_ncaab';
@@ -7,13 +9,36 @@ const HISTORY_TTL_SECS = 24 * 60 * 60; // 24 hours
 const HISTORY_MAX_AGE_MS = HISTORY_TTL_SECS * 1000;
 
 // ── History storage ───────────────────────────────────────────────────────────
-// Uses Vercel KV when KV_REST_API_URL + KV_REST_API_TOKEN are set,
-// otherwise falls back to an in-memory Map (persists for the lifetime of
-// the dev-server process).
+// Priority:
+//   1. Vercel KV  – when KV_REST_API_URL + KV_REST_API_TOKEN are set
+//   2. Local JSON file – .odds-history.json in the project root (local dev)
+//   3. In-memory Map  – last resort, lost on process restart
 
 export interface HistoryPoint { time: number; value: number }
 
 const memStore = new Map<string, HistoryPoint[]>();
+
+// ── Local file store ──────────────────────────────────────────────────────────
+
+const LOCAL_STORE_PATH = resolve(process.cwd(), '.odds-history.json');
+
+function fileStoreRead(): Record<string, HistoryPoint[]> {
+  try {
+    return JSON.parse(readFileSync(LOCAL_STORE_PATH, 'utf8')) as Record<string, HistoryPoint[]>;
+  } catch {
+    return {};
+  }
+}
+
+function fileStoreWrite(data: Record<string, HistoryPoint[]>): void {
+  try {
+    writeFileSync(LOCAL_STORE_PATH, JSON.stringify(data), 'utf8');
+  } catch { /* best-effort */ }
+}
+
+function useKv(): boolean {
+  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
 
 function kvHeaders() {
   return {
@@ -23,34 +48,41 @@ function kvHeaders() {
 }
 
 async function getHistory(gameId: string): Promise<HistoryPoint[]> {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (url && token) {
+  if (useKv()) {
     try {
-      const res = await fetch(`${url}/get/game:${gameId}`, { headers: kvHeaders() });
+      const res = await fetch(`${process.env.KV_REST_API_URL}/get/game:${gameId}`, { headers: kvHeaders() });
       if (res.ok) {
         const { result } = await res.json() as { result: string | null };
         if (result) return JSON.parse(result) as HistoryPoint[];
       }
-    } catch { /* fallthrough to mem */ }
+    } catch { /* fallthrough */ }
+    return [];
   }
-  return memStore.get(gameId) ?? [];
+
+  // Local file store
+  const data = fileStoreRead();
+  return data[gameId] ?? memStore.get(gameId) ?? [];
 }
 
 async function saveHistory(gameId: string, points: HistoryPoint[]): Promise<void> {
   memStore.set(gameId, points);
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (url && token) {
+
+  if (useKv()) {
     try {
       // SETEX key seconds value
-      await fetch(`${url}/pipeline`, {
+      await fetch(`${process.env.KV_REST_API_URL}/pipeline`, {
         method: 'POST',
         headers: kvHeaders(),
         body: JSON.stringify([['SETEX', `game:${gameId}`, HISTORY_TTL_SECS, JSON.stringify(points)]]),
       });
     } catch { /* best-effort */ }
+    return;
   }
+
+  // Local file store
+  const data = fileStoreRead();
+  data[gameId] = points;
+  fileStoreWrite(data);
 }
 
 async function appendPoint(gameId: string, point: HistoryPoint, completed: boolean): Promise<HistoryPoint[]> {
