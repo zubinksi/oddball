@@ -6,6 +6,7 @@ export interface MichiganGame {
   isMichiganHome: boolean;
   impliedProbability: number;
   score: { michigan: number; opponent: number } | null;
+  gameTime: string | null;
   bookmakers: {
     key: string;
     title: string;

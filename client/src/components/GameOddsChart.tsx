@@ -43,6 +43,9 @@ export function GameOddsChart({ entry }: Props) {
               <span style={styles.scoreValue}>{game.score.michigan}</span>
               <span style={styles.scoreDash}>–</span>
               <span style={styles.scoreValue}>{game.score.opponent}</span>
+              {game.gameTime && (
+                <span style={styles.gameTime}>{game.gameTime}</span>
+              )}
             </div>
           )}
         </div>
@@ -127,6 +130,7 @@ const styles: Record<string, React.CSSProperties> = {
   scoreTeam: { color: '#9ca3af', fontSize: 12 },
   scoreValue: { color: '#e5e7eb', fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 18 },
   scoreDash: { color: '#6b7280' },
+  gameTime: { color: '#9ca3af', fontSize: 12, marginLeft: 4 },
   dateBadge: {
     fontSize: 12,
     color: '#9ca3af',

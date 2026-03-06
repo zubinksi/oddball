@@ -24,6 +24,9 @@ interface ScoreGame {
   away_team: string;
   completed: boolean;
   scores: ScoreEntry[] | null;
+  /** Period/clock description for in-progress games, e.g. "1st Half 14:32" */
+  description?: string;
+  last_update?: string;
 }
 
 // ── Response types (mirrored in client/src/types.ts) ─────────────────────────
@@ -37,6 +40,8 @@ export interface MichiganGame {
   /** Implied win probability (0–1), averaged across bookmakers */
   impliedProbability: number;
   score: { michigan: number; opponent: number } | null;
+  /** Game clock / period description when in-progress, e.g. "1st Half 14:32" */
+  gameTime: string | null;
   bookmakers: {
     key: string;
     title: string;
@@ -113,6 +118,7 @@ async function getMichiganOdds(): Promise<OddsResponse> {
 
       const sg = scoreMap.get(game.id);
       let score: { michigan: number; opponent: number } | null = null;
+      let gameTime: string | null = null;
       if (sg?.scores) {
         const michiganEntry = sg.scores.find((s) => s.name === MICHIGAN_TEAM);
         const opponentEntry = sg.scores.find((s) => s.name !== MICHIGAN_TEAM);
@@ -121,6 +127,9 @@ async function getMichiganOdds(): Promise<OddsResponse> {
             michigan: parseInt(michiganEntry.score, 10),
             opponent: parseInt(opponentEntry.score, 10),
           };
+        }
+        if (!sg.completed && sg.description) {
+          gameTime = sg.description;
         }
       }
 
@@ -132,6 +141,7 @@ async function getMichiganOdds(): Promise<OddsResponse> {
         isMichiganHome,
         impliedProbability: avg,
         score,
+        gameTime,
         bookmakers: bms,
       };
     }),
