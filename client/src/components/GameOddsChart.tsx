@@ -13,9 +13,16 @@ function formatPct(v: number) {
 
 export function GameOddsChart({ entry }: Props) {
   const { game, history } = entry;
-  const opponent = game.isMichiganHome ? game.awayTeam : game.homeTeam;
-  const venue = game.isMichiganHome ? 'vs' : '@';
+  const opponent = game.isTrackedTeamHome ? game.awayTeam : game.homeTeam;
+  const venue = game.isTrackedTeamHome ? 'vs' : '@';
   const pct = game.impliedProbability;
+
+  const trackedScore = game.score
+    ? (game.isTrackedTeamHome ? game.score.home : game.score.away)
+    : null;
+  const opponentScore = game.score
+    ? (game.isTrackedTeamHome ? game.score.away : game.score.home)
+    : null;
 
   const gameDate = new Date(game.commenceTime);
   const isUpcoming = gameDate > new Date();
@@ -34,15 +41,15 @@ export function GameOddsChart({ entry }: Props) {
       <div style={styles.header}>
         <div>
           <div style={styles.matchup}>
-            <span style={styles.michigan}>Michigan</span>
+            <span style={styles.tracked}>{game.trackedTeam}</span>
             <span style={styles.venue}>{venue}</span>
             <span style={styles.opponent}>{opponent}</span>
           </div>
-          {game.score && (
+          {trackedScore !== null && (
             <div style={styles.score}>
-              <span style={styles.scoreValue}>{game.score.michigan}</span>
+              <span style={styles.scoreValue}>{trackedScore}</span>
               <span style={styles.scoreDash}>–</span>
-              <span style={styles.scoreValue}>{game.score.opponent}</span>
+              <span style={styles.scoreValue}>{opponentScore}</span>
               {game.gameTime && (
                 <span style={styles.gameTime}>{game.gameTime}</span>
               )}
@@ -63,7 +70,7 @@ export function GameOddsChart({ entry }: Props) {
             <span style={{ ...styles.probValue, color: pct >= 0.5 ? ACCENT : '#ef4444' }}>
               {formatPct(pct)}
             </span>
-            <span style={styles.probTeamLabel}>Michigan</span>
+            <span style={styles.probTeamLabel}>{game.trackedTeam}</span>
           </div>
           <div style={{ ...styles.probTeam, alignItems: 'flex-end' }}>
             <span style={{ ...styles.probValue, color: pct < 0.5 ? '#ef4444' : '#6b7280' }}>
@@ -124,7 +131,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
     alignItems: 'center',
   },
-  michigan: { color: ACCENT },
+  tracked: { color: ACCENT },
   venue: { color: '#6b7280', fontWeight: 400 },
   opponent: { color: '#e5e7eb' },
   score: {
@@ -134,7 +141,6 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 6,
     fontSize: 14,
   },
-  scoreTeam: { color: '#9ca3af', fontSize: 12 },
   scoreValue: { color: '#e5e7eb', fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 18 },
   scoreDash: { color: '#6b7280' },
   gameTime: { color: '#9ca3af', fontSize: 12, marginLeft: 4 },

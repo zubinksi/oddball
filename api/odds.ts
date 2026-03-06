@@ -4,9 +4,40 @@ import { resolve } from 'path';
 
 const ODDS_API_KEY = process.env.ODDS_API_KEY ?? 'f24a1c721e290d637ca7ab2988a7b401';
 const SPORT_KEY = 'basketball_ncaab';
-const MICHIGAN_TEAM = 'Michigan Wolverines';
 const HISTORY_TTL_SECS = 24 * 60 * 60; // 24 hours
 const HISTORY_MAX_AGE_MS = HISTORY_TTL_SECS * 1000;
+
+// Team names must match exactly what The Odds API returns.
+// If a team doesn't appear, double-check spelling against a live API response.
+const TRACKED_TEAMS = [
+  'Michigan Wolverines',
+  'Duke Blue Devils',
+  'Arizona Wildcats',
+  'Connecticut Huskies',
+  'Florida Gators',
+  'Iowa State Cyclones',
+  'Houston Cougars',
+  'Michigan State Spartans',
+  'Nebraska Cornhuskers',
+  'Texas Tech Red Raiders',
+  'Illinois Fighting Illini',
+  'Gonzaga Bulldogs',
+  'Virginia Cavaliers',
+  'Kansas Jayhawks',
+  'Purdue Boilermakers',
+  'Alabama Crimson Tide',
+  'North Carolina Tar Heels',
+  "St. John's Red Storm",
+  'Miami (OH) RedHawks',
+  'Arkansas Razorbacks',
+  "Saint Mary's Gaels",
+  'Miami Hurricanes',
+  'Tennessee Volunteers',
+  'Vanderbilt Commodores',
+  'Saint Louis Billikens',
+];
+
+const TRACKED_SET = new Set(TRACKED_TEAMS);
 
 // ── History storage ───────────────────────────────────────────────────────────
 // Priority:
@@ -125,15 +156,16 @@ interface ScoreGame {
 
 // ── Response types (mirrored in client/src/types.ts) ─────────────────────────
 
-export interface MichiganGame {
+export interface TrackedGame {
   id: string;
   commenceTime: string;
   homeTeam: string;
   awayTeam: string;
-  isMichiganHome: boolean;
+  trackedTeam: string;
+  isTrackedTeamHome: boolean;
   impliedProbability: number;
   completed: boolean;
-  score: { michigan: number; opponent: number } | null;
+  score: { home: number; away: number } | null;
   gameTime: string | null;
   history: HistoryPoint[];
   bookmakers: {
@@ -145,7 +177,7 @@ export interface MichiganGame {
 }
 
 export type OddsResponse =
-  | { games: MichiganGame[] }
+  | { games: TrackedGame[] }
   | { noGames: true }
   | { error: string };
 
@@ -155,7 +187,13 @@ function americanToImplied(odds: number): number {
   return odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
 }
 
-async function getMichiganOdds(): Promise<OddsResponse> {
+function findTrackedTeam(home: string, away: string): string {
+  if (TRACKED_SET.has(home)) return home;
+  if (TRACKED_SET.has(away)) return away;
+  return home; // fallback — shouldn't happen given our filter
+}
+
+async function getTrackedOdds(): Promise<OddsResponse> {
   // Fetch recent scores (last 3 days) — covers completed and in-progress games
   const scoresUrl = new URL(`https://api.the-odds-api.com/v4/sports/${SPORT_KEY}/scores`);
   scoresUrl.searchParams.set('apiKey', ODDS_API_KEY);
@@ -167,7 +205,7 @@ async function getMichiganOdds(): Promise<OddsResponse> {
     if (res.ok) {
       const all: ScoreGame[] = await res.json();
       for (const sg of all) {
-        if (sg.home_team === MICHIGAN_TEAM || sg.away_team === MICHIGAN_TEAM) {
+        if (TRACKED_SET.has(sg.home_team) || TRACKED_SET.has(sg.away_team)) {
           scoreMap.set(sg.id, sg);
         }
       }
@@ -187,7 +225,7 @@ async function getMichiganOdds(): Promise<OddsResponse> {
     if (res.ok) {
       const all: OddsGame[] = await res.json();
       for (const g of all) {
-        if (g.home_team === MICHIGAN_TEAM || g.away_team === MICHIGAN_TEAM) {
+        if (TRACKED_SET.has(g.home_team) || TRACKED_SET.has(g.away_team)) {
           oddsMap.set(g.id, g);
         }
       }
@@ -206,13 +244,14 @@ async function getMichiganOdds(): Promise<OddsResponse> {
       const homeTeam = sg?.home_team ?? og?.home_team ?? '';
       const awayTeam = sg?.away_team ?? og?.away_team ?? '';
       const commenceTime = sg?.commence_time ?? og?.commence_time ?? '';
-      const isMichiganHome = homeTeam === MICHIGAN_TEAM;
+      const trackedTeam = findTrackedTeam(homeTeam, awayTeam);
+      const isTrackedTeamHome = homeTeam === trackedTeam;
       const completed = sg?.completed ?? false;
 
       const bms = og
         ? og.bookmakers.flatMap((bm) => {
             const h2h = bm.markets.find((m) => m.key === 'h2h');
-            const outcome = h2h?.outcomes.find((o) => o.name === MICHIGAN_TEAM);
+            const outcome = h2h?.outcomes.find((o) => o.name === trackedTeam);
             if (!outcome) return [];
             return [{
               key: bm.key,
@@ -227,20 +266,20 @@ async function getMichiganOdds(): Promise<OddsResponse> {
       if (bms.length > 0) {
         impliedProbability = bms.reduce((s, b) => s + b.impliedProbability, 0) / bms.length;
       } else if (completed && sg?.scores) {
-        const mPts = parseInt(sg.scores.find((s) => s.name === MICHIGAN_TEAM)?.score ?? '0', 10);
-        const oPts = parseInt(sg.scores.find((s) => s.name !== MICHIGAN_TEAM)?.score ?? '0', 10);
-        impliedProbability = mPts > oPts ? 1 : 0;
+        const tPts = parseInt(sg.scores.find((s) => s.name === trackedTeam)?.score ?? '0', 10);
+        const oPts = parseInt(sg.scores.find((s) => s.name !== trackedTeam)?.score ?? '0', 10);
+        impliedProbability = tPts > oPts ? 1 : 0;
       } else {
         impliedProbability = 0.5;
       }
 
-      let score: { michigan: number; opponent: number } | null = null;
+      let score: { home: number; away: number } | null = null;
       let gameTime: string | null = null;
       if (sg?.scores) {
-        const mEntry = sg.scores.find((s) => s.name === MICHIGAN_TEAM);
-        const oEntry = sg.scores.find((s) => s.name !== MICHIGAN_TEAM);
-        if (mEntry && oEntry) {
-          score = { michigan: parseInt(mEntry.score, 10), opponent: parseInt(oEntry.score, 10) };
+        const homeEntry = sg.scores.find((s) => s.name === homeTeam);
+        const awayEntry = sg.scores.find((s) => s.name === awayTeam);
+        if (homeEntry && awayEntry) {
+          score = { home: parseInt(homeEntry.score, 10), away: parseInt(awayEntry.score, 10) };
         }
         if (!completed && sg.description) gameTime = sg.description;
       }
@@ -252,14 +291,15 @@ async function getMichiganOdds(): Promise<OddsResponse> {
         commenceTime,
         homeTeam,
         awayTeam,
-        isMichiganHome,
+        trackedTeam,
+        isTrackedTeamHome,
         impliedProbability,
         completed,
         score,
         gameTime,
         history,
         bookmakers: bms,
-      } satisfies MichiganGame;
+      } satisfies TrackedGame;
     })
   );
 
@@ -275,7 +315,7 @@ async function getMichiganOdds(): Promise<OddsResponse> {
 
 export default async function handler(_req: IncomingMessage, res: ServerResponse) {
   try {
-    const data = await getMichiganOdds();
+    const data = await getTrackedOdds();
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     res.end(JSON.stringify(data));

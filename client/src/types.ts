@@ -1,12 +1,13 @@
-export interface MichiganGame {
+export interface TrackedGame {
   id: string;
   commenceTime: string;
   homeTeam: string;
   awayTeam: string;
-  isMichiganHome: boolean;
+  trackedTeam: string;
+  isTrackedTeamHome: boolean;
   impliedProbability: number;
   completed: boolean;
-  score: { michigan: number; opponent: number } | null;
+  score: { home: number; away: number } | null;
   gameTime: string | null;
   history: { time: number; value: number }[];
   bookmakers: {
@@ -18,6 +19,6 @@ export interface MichiganGame {
 }
 
 export type OddsResponse =
-  | { games: MichiganGame[] }
+  | { games: TrackedGame[] }
   | { noGames: true }
   | { error: string };
