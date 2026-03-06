@@ -33,18 +33,13 @@ export function GameOddsChart({ entry }: Props) {
       {/* Header */}
       <div style={styles.header}>
         <div>
-          <div style={styles.matchup}>
-            <span style={styles.michigan}>Michigan</span>
-            <span style={styles.venue}>{venue}</span>
-            <span style={styles.opponent}>{opponent}</span>
-          </div>
           {game.score && (
-            <div style={styles.score}>
-              <span style={styles.scoreTeam}>Michigan</span>
-              <span style={styles.scoreValue}>{game.score.michigan}</span>
-              <span style={styles.scoreDash}>–</span>
+             <div style={styles.matchup}>
+              <span style={styles.michigan}>Michigan</span>
+               <span style={styles.scoreValue}>{game.score.michigan}</span>
+              <span style={styles.venue}>{venue}</span>
               <span style={styles.scoreValue}>{game.score.opponent}</span>
-              <span style={styles.scoreTeam}>{opponent}</span>
+              <span style={styles.opponent}>{opponent}</span>
             </div>
           )}
         </div>

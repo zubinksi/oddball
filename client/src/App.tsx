@@ -64,15 +64,6 @@ export default function App() {
             </div>
           )}
         </main>
-
-        <footer style={styles.footer}>
-          Odds data via{' '}
-          <a href="https://the-odds-api.com" style={styles.link} target="_blank" rel="noreferrer">
-            The Odds API
-          </a>
-          {' · '}
-          Probabilities are raw implied (no vig removal) · Updates every 30 s
-        </footer>
       </div>
     </div>
   );
