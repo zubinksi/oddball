@@ -33,13 +33,16 @@ export function GameOddsChart({ entry }: Props) {
       {/* Header */}
       <div style={styles.header}>
         <div>
+          <div style={styles.matchup}>
+            <span style={styles.michigan}>Michigan</span>
+            <span style={styles.venue}>{venue}</span>
+            <span style={styles.opponent}>{opponent}</span>
+          </div>
           {game.score && (
-             <div style={styles.matchup}>
-              <span style={styles.michigan}>Michigan</span>
-               <span style={styles.scoreValue}>{game.score.michigan}</span>
-              <span style={styles.venue}>{venue}</span>
-              <span style={styles.scoreValue}>{game.score.opponent}</span>
-              <span style={styles.opponent}>{opponent}</span>
+            <div style={styles.score}>
+              <span style={styles.scoreValue}>{game.score.michigan}</span>
+              <span style={styles.scoreDash}>–</span>
+              <span style={styles.scoreTeam}>{opponent}</span>
             </div>
           )}
         </div>
@@ -51,7 +54,7 @@ export function GameOddsChart({ entry }: Props) {
 
       {/* Probability headline */}
       <div style={styles.probRow}>
-        <span style={styles.probLabel}>Michigan win probability</span>
+        <span style={styles.probLabel}>WIN PROBABILITY</span>
         <span
           style={{
             ...styles.probValue,
@@ -91,10 +94,10 @@ export function GameOddsChart({ entry }: Props) {
 
 const styles: Record<string, React.CSSProperties> = {
   card: {
-    background: '#111827',
-    border: '1px solid #1f2937',
+    
+    border: '0px solid #1f2937',
     borderRadius: 12,
-    padding: '24px',
+  
     display: 'flex',
     flexDirection: 'column',
     gap: 16,
