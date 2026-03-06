@@ -1,13 +1,18 @@
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
-import cors from 'cors';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const isDev = process.env.NODE_ENV !== 'production';
 
 const ODDS_API_KEY = 'f24a1c721e290d637ca7ab2988a7b401';
 const SPORT_KEY = 'basketball_ncaab';
 const MICHIGAN_TEAM = 'Michigan Wolverines';
 const POLL_INTERVAL_MS = 30_000; // 30 seconds – respect API rate limits
-const PORT = 3001;
+const PORT = Number(process.env.PORT) || 3001;
+const CLIENT_ROOT = join(__dirname, '../../client');
 
 interface OddsOutcome {
   name: string;
@@ -84,8 +89,7 @@ async function fetchMichiganGames(): Promise<MichiganOddsUpdate> {
   const games: OddsGame[] = await res.json();
 
   const michiganGames = games.filter(
-    (g) =>
-      g.home_team === MICHIGAN_TEAM || g.away_team === MICHIGAN_TEAM
+    (g) => g.home_team === MICHIGAN_TEAM || g.away_team === MICHIGAN_TEAM
   );
 
   if (michiganGames.length === 0) {
@@ -99,12 +103,8 @@ async function fetchMichiganGames(): Promise<MichiganOddsUpdate> {
       .map((bm) => {
         const h2h = bm.markets.find((m) => m.key === 'h2h');
         if (!h2h) return null;
-
-        const michiganOutcome = h2h.outcomes.find(
-          (o) => o.name === MICHIGAN_TEAM
-        );
+        const michiganOutcome = h2h.outcomes.find((o) => o.name === MICHIGAN_TEAM);
         if (!michiganOutcome) return null;
-
         return {
           key: bm.key,
           title: bm.title,
@@ -131,48 +131,93 @@ async function fetchMichiganGames(): Promise<MichiganOddsUpdate> {
     };
   });
 
-  return {
-    type: 'odds_update',
-    timestamp: Date.now(),
-    games: parsed,
-  };
+  return { type: 'odds_update', timestamp: Date.now(), games: parsed };
 }
 
-// ── HTTP + WS server ──────────────────────────────────────────────────────────
+// ── HTTP server ───────────────────────────────────────────────────────────────
 
 const app = express();
-app.use(cors());
 app.use(express.json());
-
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 const httpServer = createServer(app);
-const wss = new WebSocketServer({ server: httpServer });
 
-// Keep the last snapshot so new clients get data immediately on connect.
+// ── Odds WebSocket (noServer – we route upgrade events by path) ───────────────
+
+const wss = new WebSocketServer({ noServer: true });
+
 let lastUpdate: MichiganOddsUpdate | null = null;
 
 function broadcast(data: MichiganOddsUpdate) {
   const payload = JSON.stringify(data);
   wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(payload);
-    }
+    if (client.readyState === WebSocket.OPEN) client.send(payload);
   });
 }
 
 wss.on('connection', (ws) => {
   console.log('[ws] client connected, total:', wss.clients.size);
-
-  // Send the last known snapshot immediately so the chart isn't empty.
-  if (lastUpdate) {
-    ws.send(JSON.stringify(lastUpdate));
-  }
-
+  if (lastUpdate) ws.send(JSON.stringify(lastUpdate));
   ws.on('close', () =>
     console.log('[ws] client disconnected, total:', wss.clients.size)
   );
 });
+
+// ── Dev: Vite middleware + HMR | Prod: static files ──────────────────────────
+
+if (isDev) {
+  // Dynamic import keeps vite out of the production bundle.
+  const { createServer: createViteServer } = await import('vite');
+  const vite = await createViteServer({
+    root: CLIENT_ROOT,
+    server: {
+      middlewareMode: true,
+      // Attach Vite's HMR WebSocket to the same httpServer so browsers only
+      // need one port open.  Vite adds its own 'upgrade' listener here.
+      hmr: { server: httpServer },
+    },
+    appType: 'spa',
+  });
+
+  // Capture any upgrade listeners Vite just registered, then replace them
+  // with a single router so /ws goes to our odds WS and everything else
+  // (Vite HMR) falls through to Vite's listener.
+  const viteUpgradeListeners = httpServer.rawListeners('upgrade').slice();
+  httpServer.removeAllListeners('upgrade');
+
+  httpServer.on('upgrade', (req, socket, head) => {
+    const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+    if (pathname === '/ws') {
+      wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+    } else {
+      for (const fn of viteUpgradeListeners) {
+        (fn as Function).call(httpServer, req, socket, head);
+      }
+    }
+  });
+
+  app.use(vite.middlewares);
+
+  // Graceful shutdown so tsx --watch can restart cleanly.
+  const shutdown = () => { vite.close(); httpServer.close(); process.exit(0); };
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
+} else {
+  // Production: serve the pre-built client.
+  const { default: sirv } = await import('sirv');
+  app.use(sirv(join(CLIENT_ROOT, 'dist'), { single: true }));
+
+  httpServer.on('upgrade', (req, socket, head) => {
+    const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+    if (pathname === '/ws') {
+      wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+    } else {
+      socket.destroy();
+    }
+  });
+}
+
+// ── Polling ───────────────────────────────────────────────────────────────────
 
 async function poll() {
   try {
@@ -187,21 +232,17 @@ async function poll() {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[poll] error:', msg);
-    const errUpdate: MichiganOddsUpdate = {
-      type: 'error',
-      timestamp: Date.now(),
-      message: msg,
-    };
+    const errUpdate: MichiganOddsUpdate = { type: 'error', timestamp: Date.now(), message: msg };
     lastUpdate = errUpdate;
     broadcast(errUpdate);
   }
 }
 
-// Kick off immediately, then repeat.
 poll();
 setInterval(poll, POLL_INTERVAL_MS);
 
 httpServer.listen(PORT, () => {
   console.log(`[server] listening on http://localhost:${PORT}`);
-  console.log(`[server] WebSocket ready at ws://localhost:${PORT}`);
+  console.log(`[server] WebSocket ready at ws://localhost:${PORT}/ws`);
+  if (isDev) console.log('[server] Vite HMR active on the same port');
 });

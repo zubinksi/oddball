@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MichiganOddsUpdate, MichiganGame } from '../types';
 
-// Derive the WS URL from the page's own origin so it works through the Vite
-// dev proxy as well as in production.  VITE_WS_URL can override for remote
-// deployments (e.g. "wss://api.example.com").
+// Same-origin WebSocket – works in dev (Express+Vite middleware on port 3001)
+// and production with no proxy needed.
+// VITE_WS_URL overrides for remote deployments (e.g. "wss://api.example.com").
 const WS_URL: string =
   import.meta.env.VITE_WS_URL ??
   `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`;
