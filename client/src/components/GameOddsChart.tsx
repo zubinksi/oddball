@@ -43,7 +43,6 @@ export function GameOddsChart({ entry }: Props) {
               <span style={styles.scoreValue}>{game.score.michigan}</span>
               <span style={styles.scoreDash}>–</span>
               <span style={styles.scoreValue}>{game.score.opponent}</span>
-              <span style={styles.scoreTeam}>{opponent}</span>
             </div>
           )}
         </div>

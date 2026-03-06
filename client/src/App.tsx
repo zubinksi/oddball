@@ -18,12 +18,6 @@ export default function App() {
       <div style={styles.container}>
         {/* Page header */}
         <header style={styles.header}>
-          <div style={styles.titleRow}>
-            <div>
-              <h1 style={styles.title}></h1>
-              <p style={styles.subtitle}></p>
-            </div>
-          </div>
           <StatusBar status={status} lastUpdate={lastUpdate} />
         </header>
 
