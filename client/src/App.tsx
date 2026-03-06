@@ -63,7 +63,7 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
     padding: '24px 16px',
-    background: '#262626',
+    background: '#202020',
   },
   container: {
     maxWidth: 900,
@@ -73,7 +73,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 24,
   },
   header: {
-    borderBottom: '1px solid #1f2937',
+    borderBottom: '1px solid #6b7280',
     paddingBottom: 16,
     display: 'flex',
     flexDirection: 'column',
@@ -108,12 +108,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   placeholderText: {
     fontSize: 18,
-    color: '#4b5563',
+    color: '#6b7280',
     fontWeight: 600,
   },
   placeholderSub: {
     fontSize: 14,
-    color: '#374151',
+    color: '#5d636f',
     marginTop: 8,
   },
   footer: {

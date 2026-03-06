@@ -88,7 +88,6 @@ export function GameOddsChart({ entry }: Props) {
           fill
           pulse
           momentum
-          exaggerate
         />
       </div>
     </div>
