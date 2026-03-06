@@ -306,14 +306,10 @@ async function getTrackedOdds(): Promise<OddsResponse> {
   const nowMs = Date.now();
   const pastCutoffMs = nowMs - 24 * 60 * 60 * 1000;
   const futureCutoffMs = nowMs + 24 * 60 * 60 * 1000;
-  console.log('[odds] raw games before filter:', games.map((g) => ({
-    id: g.id, home: g.homeTeam, away: g.awayTeam, commenceTime: g.commenceTime, completed: g.completed,
-  })));
   const filtered = games.filter((g) => {
     const t = new Date(g.commenceTime).getTime();
     return t >= pastCutoffMs && t <= futureCutoffMs;
   });
-  console.log('[odds] games after filter:', filtered.map((g) => ({ id: g.id, home: g.homeTeam, away: g.awayTeam, commenceTime: g.commenceTime })));
 
   filtered.sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
