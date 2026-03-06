@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MichiganOddsUpdate, MichiganGame } from '../types';
 
-const WS_URL =
-  import.meta.env.VITE_WS_URL ?? 'ws://localhost:3001';
+// Derive the WS URL from the page's own origin so it works through the Vite
+// dev proxy as well as in production.  VITE_WS_URL can override for remote
+// deployments (e.g. "wss://api.example.com").
+const WS_URL: string =
+  import.meta.env.VITE_WS_URL ??
+  `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`;
 
 const RECONNECT_DELAY_MS = 3_000;
 
