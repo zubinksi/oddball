@@ -308,8 +308,7 @@ async function getTrackedOdds(): Promise<OddsResponse> {
   const futureCutoffMs = nowMs + 24 * 60 * 60 * 1000;
   const filtered = games.filter((g) => {
     const t = new Date(g.commenceTime).getTime();
-    if (g.completed) return t >= pastCutoffMs;
-    return t <= futureCutoffMs;
+    return t >= pastCutoffMs && t <= futureCutoffMs;
   });
 
   filtered.sort((a, b) => {
