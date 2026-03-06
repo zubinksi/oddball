@@ -197,7 +197,7 @@ async function getTrackedOdds(): Promise<OddsResponse> {
   // Fetch recent scores (last 1 day) — covers completed and in-progress games
   const scoresUrl = new URL(`https://api.the-odds-api.com/v4/sports/${SPORT_KEY}/scores`);
   scoresUrl.searchParams.set('apiKey', ODDS_API_KEY);
-  scoresUrl.searchParams.set('daysFrom', '1');
+  scoresUrl.searchParams.set('daysFrom', '3');
 
   const scoreMap = new Map<string, ScoreGame>();
   try {
@@ -305,11 +305,15 @@ async function getTrackedOdds(): Promise<OddsResponse> {
 
   const nowMs = Date.now();
   const pastCutoffMs = nowMs - 24 * 60 * 60 * 1000;
-  const futureCutoffMs = nowMs + 24 * 60 * 60 * 1000;
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setUTCHours(23, 59, 59, 999);
   const filtered = games.filter((g) => {
     const t = new Date(g.commenceTime).getTime();
     if (g.completed) return t >= pastCutoffMs;
-    return t <= futureCutoffMs;
+    // In-progress (started today but not yet marked complete) or upcoming today
+    return t >= todayStart.getTime() && t <= todayEnd.getTime();
   });
 
   filtered.sort((a, b) => {
