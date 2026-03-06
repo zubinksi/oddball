@@ -303,10 +303,14 @@ async function getTrackedOdds(): Promise<OddsResponse> {
     })
   );
 
-  const cutoffMs = Date.now() + 24 * 60 * 60 * 1000;
-  const filtered = games.filter(
-    (g) => g.completed || new Date(g.commenceTime).getTime() <= cutoffMs
-  );
+  const nowMs = Date.now();
+  const pastCutoffMs = nowMs - 24 * 60 * 60 * 1000;
+  const futureCutoffMs = nowMs + 24 * 60 * 60 * 1000;
+  const filtered = games.filter((g) => {
+    const t = new Date(g.commenceTime).getTime();
+    if (g.completed) return t >= pastCutoffMs;
+    return t <= futureCutoffMs;
+  });
 
   filtered.sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
