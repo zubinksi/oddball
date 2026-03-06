@@ -2,7 +2,7 @@ import { useMichiganOdds } from './hooks/useMichiganOdds';
 import { GameOddsChart } from './components/GameOddsChart';
 import { StatusBar } from './components/StatusBar';
 
-const MAIZE = '#FFCB05';
+const MAIZE = '#FFE3C4';
 
 export default function App() {
   const { status, lastUpdate, errorMessage, gameHistories } = useMichiganOdds();
@@ -37,9 +37,9 @@ export default function App() {
 
           {status === 'no_games' && (
             <div style={styles.placeholder}>
-              <p style={styles.placeholderText}>No Michigan games with active odds right now.</p>
+              <p style={styles.placeholderText}>No games with active odds right now.</p>
               <p style={styles.placeholderSub}>
-                The chart will update automatically when odds become available.
+                See you at tipoff.
               </p>
             </div>
           )}
@@ -63,7 +63,7 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
     padding: '24px 16px',
-    background: '#0a0f1e',
+    background: '#262626',
   },
   container: {
     maxWidth: 900,

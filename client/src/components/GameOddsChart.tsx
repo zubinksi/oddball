@@ -5,7 +5,7 @@ interface Props {
   entry: GameHistory;
 }
 
-const MAIZE = '#FFCB05';
+const ACCENT = '#FFE3C4';
 
 function formatPct(v: number) {
   return `${(v * 100).toFixed(1)}%`;
@@ -61,7 +61,7 @@ export function GameOddsChart({ entry }: Props) {
         <span
           style={{
             ...styles.probValue,
-            color: pct >= 0.5 ? MAIZE : '#ef4444',
+            color: pct >= 0.5 ? ACCENT : '#ef4444',
           }}
         >
           {formatPct(pct)}
@@ -73,7 +73,7 @@ export function GameOddsChart({ entry }: Props) {
         <Liveline
           data={history}
           value={pct}
-          color={MAIZE}
+          color={ACCENT}
           theme="dark"
           formatValue={formatPct}
           window={300}
@@ -117,7 +117,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
     alignItems: 'center',
   },
-  michigan: { color: MAIZE },
+  michigan: { color: ACCENT },
   venue: { color: '#6b7280', fontWeight: 400 },
   opponent: { color: '#e5e7eb' },
   score: {
