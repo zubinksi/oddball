@@ -63,7 +63,7 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
     padding: '24px 16px',
-    background: '#202020',
+    background: '#111111',
   },
   container: {
     maxWidth: 900,
