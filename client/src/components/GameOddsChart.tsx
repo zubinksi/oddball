@@ -49,9 +49,9 @@ export function GameOddsChart({ entry }: Props) {
             </div>
           )}
         </div>
-        <div style={styles.dateBadge}>
-          {isUpcoming ? '⏳ ' : '🏀 '}
-          {dateLabel}
+        <div style={game.completed ? { ...styles.dateBadge, ...styles.finalBadge } : styles.dateBadge}>
+          {game.completed ? 'FINAL' : isUpcoming ? '⏳ ' : '🏀 '}
+          {!game.completed && dateLabel}
         </div>
       </div>
 
@@ -143,6 +143,11 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#1f2937',
     borderRadius: 6,
     padding: '4px 10px',
+  },
+  finalBadge: {
+    color: '#6b7280',
+    fontWeight: 600,
+    letterSpacing: '0.05em',
   },
   probSection: {
     display: 'flex',

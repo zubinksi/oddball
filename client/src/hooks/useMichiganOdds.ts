@@ -57,7 +57,7 @@ export function useMichiganOdds() {
           setErrorMessage(data.error);
         } else if ('noGames' in data) {
           setStatus('no_games');
-          setGameHistories(new Map());
+          // Don't clear history — completed games from localStorage stay visible
         } else {
           setStatus('ok');
           setErrorMessage(null);
@@ -65,11 +65,23 @@ export function useMichiganOdds() {
             const next = new Map(prev);
             for (const game of data.games) {
               const existing = next.get(game.id);
-              const point = { time: Date.now() / 1000, value: game.impliedProbability };
-              next.set(game.id, {
-                game,
-                history: existing ? [...existing.history, point] : [point],
-              });
+              const now = Date.now() / 1000;
+              const point = { time: now, value: game.impliedProbability };
+
+              if (game.completed && existing) {
+                // Game just finished: only append the final point once
+                const lastVal = existing.history[existing.history.length - 1]?.value;
+                const history =
+                  lastVal === game.impliedProbability
+                    ? existing.history
+                    : [...existing.history, point];
+                next.set(game.id, { game, history });
+              } else {
+                next.set(game.id, {
+                  game,
+                  history: existing ? [...existing.history, point] : [point],
+                });
+              }
             }
             saveHistories(next);
             return next;
