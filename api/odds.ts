@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 
-const ODDS_API_KEY = process.env.ODDS_API_KEY ?? '210628ef6c9bf3e3f81c72671e9e935d';
+const ODDS_API_KEY = process.env.ODDS_API_KEY ?? '8d62802848fd91540a50d3f27c3d0d06';
 const SPORT_KEY = 'basketball_ncaab';
 const HISTORY_TTL_SECS = 24 * 60 * 60; // 24 hours
 const HISTORY_MAX_AGE_MS = HISTORY_TTL_SECS * 1000;
